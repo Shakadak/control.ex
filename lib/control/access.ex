@@ -1,6 +1,7 @@
 defmodule Control.Access do
-  import Kernel, except: [get_in: 2, update_in: 3, get_and_update_in: 3]
-  defdelegate at(idx), to: Access
+  import Kernel, except: [get_in: 2, update_in: 3, get_and_update_in: 3, pop_in: 2]
+
+  #defdelegate at(idx), to: Access
   #defdelegate elem(idx), to: Access
   defdelegate key(k, default \\ nil), to: Access
   defdelegate key!(k), to: Access
@@ -37,17 +38,17 @@ defmodule Control.Access do
   end
 
   def values do &values/3 end
-  def values(op, data, next) do all(op, Enum.to_list(data), fn x -> elem(1).(op, x, next) end) end
+  def values(op, data, next) do all(op, Enum.to_list(data), fn x -> Access.elem(1).(op, x, next) end) end
 
   def values(t) do &values(&1, &2, &3, t) end
 
   def values(:get_and_update = op, data, next, t) do
-    {get, update} = all(op, Enum.to_list(data), fn x -> elem(1).(op |> IO.inspect(), x, next) |> IO.inspect() end)
+    {get, update} = all(op, Enum.to_list(data), fn x -> Access.elem(1).(op |> IO.inspect(), x, next) |> IO.inspect() end)
     {Enum.into(get, t), Enum.into(update, t)}
   end
 
   def values(op, data, next, t) when op in [:get, :update] do
-    all(op, Enum.to_list(data), fn x -> elem(1).(op, x, next) end)
+    all(op, Enum.to_list(data), fn x -> Access.elem(1).(op, x, next) end)
     |> Enum.into(t)
   end
 
@@ -74,6 +75,12 @@ defmodule Control.Access do
   def update_in(t, [x | xs], f) when is_function(x, 3) do x.(:update, t, fn t2 -> update_in(t2, xs, f) end) end
   def update_in(t, [x], f) do update(t, x, f) end
   def update_in(t, [x | xs], f) do update(t, x, fn t2 -> update_in(t2, xs, f) end) end
+
+  def pop_in(nil, [x | _]) do Access.pop(nil, x) end
+  def pop_in(t, [x]) when is_function(x, 3) do x.(:pop, t) end
+  def pop_in(t, [x | xs]) when is_function(x, 3) do x.(:pop, t, fn t2 -> pop_in(t2, xs) end) end
+  def pop_in(t, [x]) do pop(t, x) end
+  def pop_in(t, [x | xs]) do pop(t, x, fn t2 -> pop_in(t2, xs) end) end
 
   # Accessors
 
@@ -109,7 +116,7 @@ defmodule Control.Access do
   end
 
   def at(index) when is_integer(index) and index >= 0 do
-    fn op, data, next -> at(op, data, index, next) end
+    fn op, data, next -> at(op, data, next, index) end
   end
 
   def at(:get, data, next, index) when is_list(data) do
